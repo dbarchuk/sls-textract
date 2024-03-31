@@ -1,0 +1,1 @@
+A small project using SLS framework and AWS

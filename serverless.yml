@@ -1,0 +1,77 @@
+service: sls-textract
+frameworkVersion: '3'
+
+custom:
+  bucket: t3s-tj9y5a9l7vavms53hss3
+
+provider:
+  name: aws
+  runtime: python3.10
+  region: eu-central-1
+  iamRoleStatements:
+    - Effect: "Allow"
+      Action:
+        - "dynamodb:PutItem"
+        - "dynamodb:GetItem"
+      Resource:
+        - "Fn::GetAtt": [ TextExtractionResults, Arn ]
+    - Effect: "Allow"
+      Action:
+        - "s3:PutObject"
+        - "s3:getObject"
+      Resource: "arn:aws:s3:::${self:custom.bucket}/*"
+    - Effect: "Allow"
+      Action:
+        - "textract:StartDocumentTextDetection"
+        - "textract:GetDocumentTextDetection"
+      Resource: "*"
+  httpApi:
+    payload: '2.0'
+
+functions:
+  file_upload:
+    handler: handler.file_upload
+    events:      
+      - httpApi: 'POST /files'
+
+  get_result:
+    handler: handler.get_result
+    events:      
+      - httpApi: 'GET /files/{file_id}'
+
+  process_uploaded_file:
+    handler: handler.process_uploaded_file
+    timeout: 600
+    events:
+      - s3:
+          bucket: ${self:custom.bucket}
+          event: s3:ObjectCreated:*
+    
+
+resources:
+  Resources:
+    TextExtractionResults:
+      Type: "AWS::DynamoDB::Table"
+      Properties:
+        TableName: "TextExtractionResults"
+        AttributeDefinitions:
+          - AttributeName: "file_id"
+            AttributeType: "S"
+        KeySchema:
+          - AttributeName: "file_id"
+            KeyType: "HASH"
+        ProvisionedThroughput:
+          ReadCapacityUnits: 1
+          WriteCapacityUnits: 1
+
+plugins:
+  - serverless-offline
+  - serverless-openapi-documentation
+
+package:
+  exclude:
+    - node_modules/**
+    - .idea/**
+    - README.md
+    - package.json
+    - package-lock.json
